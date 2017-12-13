@@ -7,5 +7,5 @@ Project involved myself, Tejasvi Sharma, Govinda Banjade, and Raju Timsina.
 Dataset was gathered from the UCI Machine Learning Repository:
 https://archive.ics.uci.edu/ml/datasets/Wine+Quality
 
-Results can be found on RPub:
+Our results can be found on RPub:
 http://rpubs.com/Siebelm/341162
