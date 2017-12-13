@@ -1,0 +1,689 @@
+---
+title: "DATS 6101 - Wine Chemical Properties"
+author: "Michael Siebel, Tejasvi Sharma, Govinda Banjade, and Raju Timsina"
+date: "December 11, 2017"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objective
+
+We are interested in understanding whether wine taste testers are actually judging the quality of wine based on its chemical properties.
+ 
+In addition, we want to judge exclusively what makes a high quality wine, which means we are interested in a classification problem.
+
+We know that alcohol content and residual sugar can be identified by the drinker more than any other chemical.
+
+We hypothesis:  1) That high alcohol content can be classified as high quality wine, red or white, with a 95% confidence level.  2) That residual sugar can be classified as high quality wine among white wine with a 95% confidence level.
+
+Beyond our hypotheses, we will look into the differences between red and white wine.
+
+Previous research has found that the chemical properties of wine are not highly associated with the quality of wine (cite).  However, we are looking at only classifying high quality wine as a dichotomous variable, and not as a linear variable, which may help us discover different findings.
+
+When gathering the data, we combined two different datasets, one with white wine data and one with red wine data.  We created a dichotomous variable that identifies if the other variables are applying to red or white wine.  Wine quality, a variable that can range from 0 to 10, but ranges from 3 to 9 in our dataset.  All values that are seven or higher we consider "high quality" wine, which takes a value of one while the all values below seven take a value of 0.  
+
+Our data had no missing data.  We found, using box plots, that alcohol is a good variable for classification as it has little variation in high quality wine and little variation in low quality wine, but lots of variables between high quality wine and low quality wine.  Sugar does not show the same strong distinction.  
+
+                
+```{r}
+###########
+#libraries
+###########
+library(pscl)
+library(e1071)
+library(gridExtra)
+library(ggplot2)
+library(GGally)
+library(Hmisc)
+library(corrplot)
+library(outliers)
+library(magicfor)
+library(caret)
+library(rpart.plot)
+library(rpart)
+library(plotly)
+library(RColorBrewer)
+
+###############################################
+#importing data and checking for missing value
+###############################################
+setwd("C:\\Users\\Siebelm\\Documents\\3 GWU\\1 DATS 6101\\Project\\Final")
+wine_white_df0 <- read.csv("winequality-white.csv", sep=",")
+wine_red_df0 <- read.csv("winequality-red.csv", sep=",")
+sum(is.na(wine_white_df0))
+sum(is.na(wine_red_df0))
+#No missing value found; good.
+
+##############################
+#summary of the wine_white_df0 data
+##############################
+str(wine_white_df0)
+summary(wine_white_df0)
+head(wine_white_df0)
+tail(wine_white_df0)
+names(wine_white_df0)
+dim(wine_white_df0)
+View(wine_white_df0)
+
+#############################
+#summary of the wine_red_df0 data
+############################
+str(wine_red_df0)
+summary(wine_red_df0)
+head(wine_red_df0)
+tail(wine_red_df0)
+names(wine_red_df0)
+dim(wine_red_df0)
+View(wine_red_df0)
+
+#White wine has 4898 samples and 12 variables where as red-wine has 1599 samples and 12 variables. For both the data sets the response variable is quality. The eleven predicting variables are of numeric class and response variable is of the integer class. 
+
+table(wine_white_df0$quality)
+table(wine_red_df0$quality)
+
+#From the tables found, it is clear that there is very big class imbalance. For white-wine out of 4898 samples, only 20 are of the class 3 and only 5 are of the class 9. There are not enough samples of those classes to split the data into useable training and test sets. 
+
+
+#lets define the quality as binomail value "good" and "bad"; as if quality value is equal to and greater than 7 the wine is "good" and if quality value is smaller than 7 the wine is "bad". 
+quality.factor <- factor(wine_white_df0$quality)
+quality.cat <- NA
+quality.cat <- ifelse(wine_white_df0$quality>=7, 1, NA)
+quality.cat <- ifelse(wine_white_df0$quality<=6, 0, quality.cat)
+
+quality.cat <- factor(quality.cat, levels = c("0", "1"))
+
+######################################################
+#Draw boxplots for different variable of white-wine
+######################################################
+for (i in c(1:11)){
+  box = qplot(x=quality.cat, y = wine_white_df0[,i], data=wine_white_df0, geom="boxplot", ylab=names(wine_white_df0)[i], xlab= "Quality Catagory" )
+  grid.arrange(box, ncol=2)
+}
+
+###################################################
+#Draw boxplots for different variables of red-wine
+###################################################
+quality.factor1 <- factor(wine_red_df0$quality)
+quality.cat1 <- NA
+quality.cat1 <- ifelse(wine_red_df0$quality>=7, 1, NA)
+quality.cat1 <- ifelse(wine_red_df0$quality<=6, 0, quality.cat1)
+
+quality.cat1 <- factor(quality.cat1, levels = c("0", "1"))
+
+for (i in c(1:11)){
+  box1 = qplot(x=quality.cat1, y = wine_red_df0[,i], data=wine_red_df0, geom="boxplot", ylab=names(wine_red_df0)[i], xlab= "Quality Catagory" )
+  grid.arrange(box1, ncol=2)
+}
+
+#################################################################
+#Finding the correlation between different variables in white-wine
+#################################################################
+ready <-cor(wine_white_df0)
+corrplot(ready, type="upper", method="number", tl.srt=45, title="Correlation between different variables in wine_white_df0 ")
+
+#lets have a look at how correlated our different variables are with the quality (simplified than corplot)
+cor(x=wine_white_df0[,1:11], y=wine_white_df0$quality)
+# "alcohol", "density", and "Chlorides" seems to be most influencing contents for the white-wine quality
+
+################################################################
+#Finding the correlation between different variables in red-wine
+################################################################
+ready1 <-cor(wine_red_df0)
+corrplot(ready1, type="upper", method="number", tl.srt=45, title="Correlation between different variables in wine_red_df0 ")
+
+#lets have a look at how correlated our different variables are with the quality (simplified than corplot)
+cor(x=wine_red_df0[,1:11], y=wine_red_df0$quality)
+# "alcohol", "volatile.acidity", "Sulphates", and "Citric.acid" seems to be most influencing contents for the wine_red_df0 quality
+```
+
+## Models
+
+Our EDA process shows that alcohol may be a good predictor, but sugar might not.  We also find that density has high correlations with other variables so we will check for multicollinearity in any modeling we do and likely drop it.
+
+We tried KNN models and Decision Trees, but the model fit was not necessarily better than a logistic regression, the latter of which would give us better illustrative power.
+
+```{r}
+# Since alcohol and residual sugar both have high correlation with the density, lets delete density to alleviate the multicollinearity. 
+wine_white_df0$density <- NULL
+wine_red_df0$density <- NULL
+
+#Dividing the wine_white_df0 data into training and test sets
+#training set for white-wine
+white_train <- wine_white_df0[1:3750, ]
+
+#test set for white-wine
+white_test <- wine_white_df0[3751:4898, ]
+
+#Dividing the wine_red_df0 data into training and test sets
+#train set for wine_red_df0
+red_train <- wine_red_df0[1:1200, ]
+
+#test set for wine_red_df0
+red_test <- wine_red_df0[1201:1599, ]
+
+#############################
+# White-wine KNN model
+############################
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
+
+set.seed(2)
+whiteKnn <- train(quality ~., data = white_train, method = "knn", trControl = fitControl)
+whiteKnn
+#For wine_white_df0: Highest R-squared is ~ 0.2 with k=5, along with RMSE of 0.8361450  and MAE of 0.6483786
+
+# Test KNN model on white wine test data
+whitew_knnPredictions <- predict(whiteKnn, newdata = white_train)
+r2_whitew_knn <- R2(whitew_knnPredictions, white_train$quality)
+r2_whitew_knn
+rmse_whitew_knn <- RMSE(whitew_knnPredictions, white_train$quality)
+rmse_whitew_knn
+
+###############################
+#Red-wine KNN model
+###############################
+set.seed(2)
+redKnn <- train(quality ~., data = red_train, method = "knn", trControl = fitControl)
+redKnn
+#The highest R-squared is ~0.23 with k=5, along with RMSE of 0.7221064 and MAE of 0.5486295
+
+# Test KNN model on white wine test data
+redw_knnPredictions <- predict(redKnn, newdata = red_train)
+r2_redw_knn <- R2(redw_knnPredictions, red_train$quality)
+r2_redw_knn
+rmse_redw_knn <- RMSE(redw_knnPredictions, red_train$quality)
+rmse_redw_knn
+
+
+####################################
+# Decision tree model for wine_white_df0
+####################################
+m.rpart <-rpart(quality~., data=white_train)
+m.rpart
+
+#Summary
+summary(m.rpart)
+
+# Visualizing the decision tree
+rpart.plot(m.rpart, digits = 3)
+
+#lets see R-square for our medel
+rsq.rpart(m.rpart)
+#R-square measure is ~0.2 
+
+# Evaluating the model performance
+p.rpart <- predict(m.rpart, white_test)
+summary(p.rpart)
+summary(white_test$quality)
+# From these summaries, we can say that our model is not good for estimating really bad and really good wine. 
+
+#lets measure the performance with the mean absolute error
+MAE <- function(actual, predicted) {
+  mean(abs(actual - predicted))
+}
+
+# MAE for our predictions
+MAE(p.rpart, white_test$quality)
+# MAE of 0.57. 
+
+#######################################
+#Lets use Decision tree for red-wine
+#######################################
+
+# Decision tree
+m.rpart1 <-rpart(quality~., data=red_train)
+m.rpart1
+
+#Summary
+summary(m.rpart1)
+
+# Visualizing the decision tree
+rpart.plot(m.rpart1, digits = 3)
+
+#lets see R-square for our medel
+rsq.rpart(m.rpart1)
+#R-square measure is ~0.2 
+
+# Evaluating the model performance
+p.rpart1 <- predict(m.rpart1, red_test)
+summary(p.rpart1)
+summary(red_test$quality)
+# From these summaries, we can say that our model is not good for estimating really bad and really good wine. 
+
+#lets measure the performance with the mean absolute error
+MAE <- function(actual, predicted) {
+  mean(abs(actual - predicted))
+}
+
+# MAE for our predictions
+MAE(p.rpart1, red_test$quality)
+# Mean absolute error of 0.56. 
+
+# Conclusion: Decision tree doesn't give us a good model for white and red wines. 
+```
+
+## Creating Red and White individual tables and Testing for multicollinearity
+
+First, we confirmed from our EDA that density has a variance inflation factor of over 10, and that by removing it, all other variables lower their variance inflation factor to below 10, eliminating multicollinearity.  we run models separately for white and red and conclude that the dataset are correct to combine into one dataset, but that there still may be significant differences between red and white wines.  Therefore, we take interaction terms of three variables (citric acid, sulphates, and total SO2) and later show that their addition improves our model's diagnositics.
+
+```{r}
+# Red
+wine_red_df1 <- read.csv("winequality-red.csv", sep=",")
+wine_red_df1$quality.dum[wine_red_df1$quality < 7] <- 0
+wine_red_df1$quality.dum[wine_red_df1$quality >= 7] <- 1
+wine_red_df1$quality <- NULL
+wine_red_df1_std <- data.frame(wine_red_df1)
+for(col in names(wine_red_df1)){
+  wine_red_df1_std[,col] <- (wine_red_df1[,col]-min(wine_red_df1[,col]))/(max(wine_red_df1[,col])-min(wine_red_df1[,col]))
+}
+
+model_red_std1 <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_red_df1_std) 
+summary(model_red_std1)
+
+
+# White
+wine_white_df1 <- read.csv("winequality-white.csv", sep=",")
+wine_white_df1$quality.dum[wine_white_df1$quality < 7] <- 0
+wine_white_df1$quality.dum[wine_white_df1$quality >= 7] <- 1
+wine_white_df1$quality <- NULL
+wine_white_df1_std <- data.frame(wine_white_df1)
+for(col in names(wine_white_df1)){
+  wine_white_df1_std[,col] <- (wine_white_df1[,col]-min(wine_white_df1[,col]))/(max(wine_white_df1[,col])-min(wine_white_df1[,col]))
+}
+
+wine_white_std1 <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_white_df1_std) 
+summary(wine_white_std1)
+
+
+### Standardized Model ###
+wine_df1 <- read.csv("Combined_Wine_Data_NumType.csv", sep=",")
+wine_df1$quality.dum[wine_df1$quality < 7] <- 0
+wine_df1$quality.dum[wine_df1$quality >= 7] <- 1
+head(wine_df1$quality.dum, 20)
+wine_df1$quality <- NULL
+
+summary(wine_df1)
+wine_df1_std <- data.frame(wine_df1)
+for(col in names(wine_df1)){
+  wine_df1_std[,col] <- (wine_df1[,col]-min(wine_df1[,col]))/(max(wine_df1[,col])-min(wine_df1[,col]))
+}
+
+model_std1 <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_df1_std) 
+summary(model_std1)
+library(car)
+round(vif(model_std1),2)
+### Multicollinearity is an issue
+
+
+### Redo based on removing for Multicollinearity ###
+# Red
+wine_red_df2 <- read.csv("winequality-red.csv", sep=",")
+wine_red_df2$quality.dum[wine_red_df2$quality < 7] <- 0
+wine_red_df2$quality.dum[wine_red_df2$quality >= 7] <- 1
+wine_red_df2$quality <- NULL
+wine_red_df2_std <- data.frame(wine_red_df2)
+for(col in names(wine_red_df2)){
+  wine_red_df2_std[,col] <- (wine_red_df2[,col]-min(wine_red_df2[,col]))/(max(wine_red_df2[,col])-min(wine_red_df2[,col]))
+}
+summary(wine_red_df2_std)
+
+wine_red_df2_std$density <- NULL
+model_red_std2 <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_red_df2_std) 
+summary(model_red_std2)
+
+# White
+wine_white_df2 <- read.csv("winequality-white.csv", sep=",")
+wine_white_df2$quality.dum[wine_white_df2$quality < 7] <- 0
+wine_white_df2$quality.dum[wine_white_df2$quality >= 7] <- 1
+wine_white_df2$quality <- NULL
+wine_white_df2_std <- data.frame(wine_white_df2)
+for(col in names(wine_white_df2)){
+  wine_white_df2_std[,col] <- (wine_white_df2[,col]-min(wine_white_df2[,col]))/(max(wine_white_df2[,col])-min(wine_white_df2[,col]))
+}
+summary(wine_white_df2_std)
+
+wine_white_df2_std$density <- NULL
+wine_white_std2 <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_white_df2_std) 
+summary(wine_white_std2)
+
+
+### Standardized Model ###
+wine_df2 <- read.csv("Combined_Wine_Data_NumType.csv", sep=",")
+wine_df2$quality.dum[wine_df2$quality < 7] <- 0
+wine_df2$quality.dum[wine_df2$quality >= 7] <- 1
+head(wine_df2$quality.dum, 20)
+
+wine_df2$quality <- NULL
+wine_df2$density <- NULL
+summary(wine_df2)
+wine_df2_std <- data.frame(wine_df2)
+for(col in names(wine_df2)){
+  wine_df2_std[,col] <- (wine_df2[,col]-min(wine_df2[,col]))/(max(wine_df2[,col])-min(wine_df2[,col]))
+}
+summary(wine_df2_std)
+
+model_std2 <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_df2_std) 
+summary(model_std2)
+round(vif(model_std2),2)
+### No Multicollinearity
+```
+
+## Final model with interaction terms
+
+First, we confirm our first hypothesis that alcohol is significant with an alpha 0.05 and positively associated with quality.  Second, we confirm our second hypothesis that sugar is also significant and positively associated with quality.  Note, residual sugar is significant for both red and white, and not significantly higher for white wine, like we originally thought.
+
+```{r}
+#setwd("C:\\Users\\Siebelm\\Documents\\3 GWU\\1 DATS 6101\\Project\\Final")
+wine_df <- read.csv("Combined_Wine_Data_NumType.csv", sep=",")
+wine_df$quality.dum[wine_df$quality < 7] <- 0
+wine_df$quality.dum[wine_df$quality >= 7] <- 1
+wine_df$quality <- NULL
+wine_df$density <- NULL
+wine_df_std <- data.frame(wine_df)
+for(col in names(wine_df)){
+  wine_df_std[,col] <- (wine_df[,col]-min(wine_df[,col]))/(max(wine_df[,col])-min(wine_df[,col]))
+}
+summary(wine_df_std)
+
+
+### Model without Interaction Terms
+first_model_std <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_df_std) 
+summary(first_model_std)
+round(vif(first_model_std),2)
+
+### Model with Interaction Terms
+model <- glm(quality.dum~fixed.acidity + volatile.acidity + residual.sugar + 
+               chlorides + pH + total.sulfur.dioxide + alcohol + 
+               citric.acid*type + sulphates*type + total.sulfur.dioxide*type, 
+             family = binomial(link = "logit"), data = wine_df)
+summary(model)
+round(summary(model)$coefficients,2)
+model_std <- glm(quality.dum~fixed.acidity + volatile.acidity + residual.sugar + 
+                 chlorides + pH + total.sulfur.dioxide + alcohol + 
+                 citric.acid*type + sulphates*type + total.sulfur.dioxide*type, 
+                 family = binomial(link = "logit"), data = wine_df_std)
+summary(model_std)
+round(summary(model_std)$coefficients,2)
+```
+
+## Diagnostics
+
+We will show that our residuals are not great, and our AIC is high.  However, we have a high hit rate of 81%.  After dividing the sample, we get high sensitivity when the true positive rate reaches 82%, which has a trade off with a false positive rate of just below 40%.  This means we are roughly twice as likely to get a true postive verses a false positive.  Overall, our model is not perfect but it is strong enough to make predictions.  It is better with interaction terms compared to without in terms of deviance residual, AIC, and goodness-of-fit.
+
+```{r}
+### Diagnostics ###
+wine_df <- read.csv("Combined_Wine_Data_NumType.csv", sep=",")
+wine_df$quality.dum[wine_df$quality < 7] <- 0
+wine_df$quality.dum[wine_df$quality >= 7] <- 1
+wine_df$quality <- NULL
+wine_df$density <- NULL
+wine_df_std <- data.frame(wine_df)
+for(col in names(wine_df)){
+  wine_df_std[,col] <- (wine_df[,col]-min(wine_df[,col]))/(max(wine_df[,col])-min(wine_df[,col]))
+}
+colnames(wine_df_std)
+
+first_model_std <- glm(quality.dum~., family = binomial(link = "logit"), data = wine_df_std) 
+summary(first_model_std)
+library(ResourceSelection)
+hoslem.test(wine_df$quality.dum, fitted(first_model_std)) # Fail test
+qqnorm(resid(first_model_std))
+library(pROC)
+round(pR2(first_model_std),2) # McFadden Pseudo-R2 is above 0.2
+
+summary(model_std)
+hoslem.test(wine_df$quality.dum, fitted(model_std)) # Fail test
+qqnorm(resid(model_std))
+round(pR2(model_std),2) # McFadden Pseudo-R2 is above 0.2
+prob <- predict(model, type = c("response"))
+h <- roc(quality.dum~prob, data=wine_df)
+h # Area under the curve: 0.8104
+plot(h)
+
+
+### Train v Test ###
+View(wine_df)
+wine_df_random <- wine_df[sample(1:nrow(wine_df)), ]
+View(wine_df_random)
+train <- wine_df_random[1:3248, ]
+test <- wine_df_random[3249:6497, ]
+train.model <- glm(quality.dum~fixed.acidity + volatile.acidity + residual.sugar + 
+                   chlorides + pH + total.sulfur.dioxide + alcohol + 
+                   citric.acid*type + sulphates*type + total.sulfur.dioxide*type, 
+                   family = binomial(link = "logit"), data = train)
+summary(train.model)
+
+library(ROCR)
+pred.model <- predict.glm(train.model, test, type='response')
+newpred <- prediction(pred.model, test$quality.dum)
+newpred.performance <- performance(newpred, measure = "tpr",x.measure = "fpr")
+plot(newpred.performance)
+abline(a=0, b= 1)
+AUC <- performance(newpred, measure = "auc")
+AUC # Correctly predicted 82%
+```
+
+## Odds Ratios
+
+Need to manually create odds ratio for interaction terms.  The log odds are not very useful as the scales are not inuitive (unless perhaps you are a chemist).  Instead, we will illustrate change using predicted probabilities.
+
+```{r}
+### Create Log odds ###
+alcohol <- summary(model)$coefficients[8]
+residual.sugar <- summary(model)$coefficients[4]
+white.citric.acid.coef <- summary(model)$coefficients[9]
+red.citric.acid.coef <- summary(model)$coefficients[9]+summary(model)$coefficients[12]
+white.sulphates.coef <- summary(model)$coefficients[11]
+red.sulphates.coef <- summary(model)$coefficients[11]+summary(model)$coefficients[13]
+white.total.sulfur.dioxide.coef <- summary(model)$coefficients[7]
+red.total.sulfur.dioxide.coef <- summary(model)$coefficients[7]+summary(model)$coefficients[14]
+
+### Log odds
+paste("Alcohol", round(exp(alcohol),2))
+paste("Residual Sugar", round(residual.sugar,2))
+paste("White wine: Citric Acid", round(exp(white.citric.acid.coef),2))
+paste("Red wine: Citric Acid", round(exp(red.citric.acid.coef),2))
+paste("White wine: Sulphates", round(exp(white.sulphates.coef),2))
+paste("Red wine: Sulphates", round(exp(red.sulphates.coef),2))
+paste("White wine: SO2", round(exp(white.total.sulfur.dioxide.coef),2))
+paste("Red wine: SO2", round(exp(red.total.sulfur.dioxide.coef),2))
+```
+
+## Predicted Probabilities
+
+Generating predictions as variables move from their 20th percentile to their 80th percentile.  While such a change in variable is uncommon, it is much more likely than a variable mvoing from their minimum to their maximum.
+
+Predictions
+1) Alcohol: predict quality of wine as alcohol moves from 9.4% to 11.5% alcohol content and everything else, including type of wine, rest at their mean.
+2) Residual Sugar: predict quality of wine as sugar moves from 1.7 g/dm3 to 9.6 g/dm3 and everything else, including type of wine, rest at their mean.
+3) Red Wine Interactions: predict quality of red wine as SO2 moves from 165.0 to 62.2 mg/dm3 and Sulphates move from 0.41 g(potassium sulphate)/dm3 to 0.63 g(potassium sulphate)/dm3 and everything else, except type of wine which is red, rest at their mean.  We also predict the same relationship with white wine to show that it has a smaller impact.
+4) White Wine Interactions: predict quality of white wine as citric acid moves from 0.23 to 0.42 mg/dm3 and everything else, except type of wine which is white, rest at their mean.  We also predict the same relationship with red wine to show that it has a smaller impact.
+5) Top Six for red wine: predict quality of red wine based on high alcohol, sugar, and sulphates, and low total SO2, Chlorides, and Volatile Acidity, with the rest at its mean.
+
+We created predicted probabilities that show that as alcohol content moves from its 20th percentile of 9.4% to its 80th percentile of 11.5%, the likelihood of that wine resulting in high quality wine moves from 0.04 to 0.21.  For residual sugar, a similar change increases the likelihood from 0.08 to 0.12.  The red wine interactions (sulphates and total SO2) also make large increases in probability, but the white wine interactions (citric acid) do not make as much change.  Using the top six variables at their 80th percentile (or 20th percentile if they are negative), we can reach a predicted probability as high as 0.5.  In other words, it's extremely difficult to make high quality wine more likely than low quality wine, based on how we defined high quality wine.
+
+```{r}
+### Predicted Probabilities ###
+model <- glm(quality.dum~fixed.acidity + volatile.acidity + residual.sugar + 
+               chlorides + pH + total.sulfur.dioxide + alcohol + 
+               citric.acid*type + sulphates*type + total.sulfur.dioxide*type, 
+             family = binomial(link = "logit"), data = wine_df)
+summary(model)
+
+### Alcohol ###
+quantile(wine_df$alcohol, c(.2, .8))
+# High Alcohol
+highalcohol.pp <- data.frame(type=mean(wine_df$type), alcohol=quantile(wine_df$alcohol, c(.8)), 
+                             total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), 
+                             chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                             volatile.acidity=mean(wine_df$volatile.acidity), 
+                             residual.sugar=mean(wine_df$residual.sugar), 
+                             free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                             total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), pH=mean(wine_df$pH), 
+                             sulphates=mean(wine_df$sulphates), citric.acid=mean(wine_df$citric.acid)) 
+highalcohol.pp.pred <- predict(model, highalcohol.pp, type='response')
+# Low Alcohol
+lowalcohol.pp <- data.frame(type=mean(wine_df$type), alcohol=quantile(wine_df$alcohol, c(.2)), 
+                            total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide),
+                            chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                            volatile.acidity=mean(wine_df$volatile.acidity), 
+                            residual.sugar=mean(wine_df$residual.sugar), 
+                            free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                            total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), pH=mean(wine_df$pH), 
+                            sulphates=mean(wine_df$sulphates), citric.acid=mean(wine_df$citric.acid))
+lowalcohol.pp.pred <- predict(model, lowalcohol.pp, type='response')
+
+paste("Wine with the max alcohol: ", round(highalcohol.pp.pred*100,0))
+paste("Wine with the min alcohol: ", round(lowalcohol.pp.pred*100,0))
+
+### Residual Sugar ###
+quantile(wine_df$residual.sugar, c(.2, .8))
+# High sugar
+highsugar.pp <- data.frame(type=mean(wine_df$type), residual.sugar=quantile(wine_df$residual.sugar, c(.8)), 
+                           alcohol=mean(wine_df$alcohol), total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide),
+                           chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                           volatile.acidity=mean(wine_df$volatile.acidity), 
+                           residual.sugar=mean(wine_df$residual.sugar), 
+                           free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                           total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), pH=mean(wine_df$pH), 
+                           sulphates=mean(wine_df$sulphates), citric.acid=mean(wine_df$citric.acid)) 
+highsugar.pp.pred <- predict(model, highsugar.pp, type='response')
+# Low sugar
+lowsugar.pp <- data.frame(type=mean(wine_df$type), residual.sugar=quantile(wine_df$residual.sugar, c(.2)), 
+                          alcohol=mean(wine_df$alcohol), total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide),
+                          chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                          volatile.acidity=mean(wine_df$volatile.acidity), 
+                          free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                          total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), pH=mean(wine_df$pH), 
+                          sulphates=mean(wine_df$sulphates), citric.acid=mean(wine_df$citric.acid))
+lowsugar.pp.pred <- predict(model, lowsugar.pp, type='response')
+
+paste("Wine with the max alcohol: ", round(highsugar.pp.pred*100,0))
+paste("Wine with the min alcohol: ", round(lowsugar.pp.pred*100,0))
+
+### Interactions ###
+### Red Interactions ###
+quantile(wine_df$total.sulfur.dioxide, c(.2, .8))
+quantile(wine_df$sulphates, c(.2, .8))
+# Low SO2 and High Sulphates
+red.bestred.pp <- data.frame(type=1, total.sulfur.dioxide=quantile(wine_df$total.sulfur.dioxide, c(.2)), 
+                             sulphates=quantile(wine_df$sulphates, c(.8)), 
+                             chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                             volatile.acidity=mean(wine_df$volatile.acidity), 
+                             residual.sugar=mean(wine_df$residual.sugar), 
+                             free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                             pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol), citric.acid=mean(wine_df$citric.acid))
+red.bestred.pp.pred <- predict(model, red.bestred.pp, type='response')
+# High SO2 and Low Sulphates
+red.worstred.pp <- data.frame(type=1, total.sulfur.dioxide=quantile(wine_df$total.sulfur.dioxide, c(.8)), 
+                              sulphates=quantile(wine_df$sulphates, c(.2)), 
+                              chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                              volatile.acidity=mean(wine_df$volatile.acidity), 
+                              residual.sugar=mean(wine_df$residual.sugar), 
+                              free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                              pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol), citric.acid=mean(wine_df$citric.acid))
+red.worstred.pp.pred <- predict(model, red.worstred.pp, type='response')
+
+paste("Red Wine with the max sulphates and min SO2: ", round(red.bestred.pp.pred*100,0))
+paste("Red Wine with the min sulphates and max SO2: ", round(red.worstred.pp.pred*100,0))
+
+# Compare results to the white wine equivalent
+# Low SO2 and High Sulphates
+white.bestwhite.pp <- data.frame(type=0, total.sulfur.dioxide=quantile(wine_df$total.sulfur.dioxide, c(.2)), 
+                                 sulphates=quantile(wine_df$sulphates, c(.8)), 
+                                 chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                                 volatile.acidity=mean(wine_df$volatile.acidity), 
+                                 residual.sugar=mean(wine_df$residual.sugar), 
+                                 free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                                 pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol), citric.acid=mean(wine_df$citric.acid))
+white.bestwhite.pp.pred <- predict(model, white.bestwhite.pp, type='response')
+# High SO2 and Low Sulphates
+white.worstwhite.pp <- data.frame(type=0, total.sulfur.dioxide=quantile(wine_df$total.sulfur.dioxide, c(.8)), 
+                                  sulphates=quantile(wine_df$sulphates, c(.2)), 
+                                  chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                                  volatile.acidity=mean(wine_df$volatile.acidity), 
+                                  residual.sugar=mean(wine_df$residual.sugar), 
+                                  free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                                  pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol), 
+                                  citric.acid=mean(wine_df$citric.acid))
+white.worstwhite.pp.pred <- predict(model, white.worstwhite.pp, type='response')
+
+paste("White Wine with the max sulphates and min SO2: ", round(white.bestwhite.pp.pred*100,0))
+paste("White Wine with the min sulphates and max SO2: ", round(white.worstwhite.pp.pred*100,0))
+
+### White Interactions ###
+quantile(wine_df$citric.acid, c(.2, .8))
+# Low Citric Acid
+white.bestwhite.pp <- data.frame(type=0, citric.acid=quantile(wine_df$citric.acid, c(.2)), 
+                                 total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), 
+                                 sulphates=mean(wine_df$sulphates), 
+                                 chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                                 volatile.acidity=mean(wine_df$volatile.acidity), 
+                                 residual.sugar=mean(wine_df$residual.sugar), 
+                                 free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                                 pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol))
+white.bestwhite.pp.pred <- predict(model, white.bestwhite.pp, type='response')
+# High Citric Acid
+white.worstwhite.pp <- data.frame(type=0, citric.acid=quantile(wine_df$citric.acid, c(.8)), 
+                                  total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), 
+                                  sulphates=mean(wine_df$sulphates), 
+                                  chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                                  volatile.acidity=mean(wine_df$volatile.acidity), 
+                                  residual.sugar=mean(wine_df$residual.sugar), 
+                                  free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                                  pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol))
+white.worstwhite.pp.pred <- predict(model, white.worstwhite.pp, type='response')
+
+paste("White Wine with the min Citric Acid: ", round(white.bestwhite.pp.pred*100,0))
+paste("White Wine with the max Citric Acid: ", round(white.worstwhite.pp.pred*100,0))
+
+# Red Wine equivalent
+# Low Citric Acid
+red.bestwhite.pp <- data.frame(type=1, citric.acid=quantile(wine_df$citric.acid, c(.2)), 
+                               total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), sulphates=mean(wine_df$sulphates), 
+                               chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                               volatile.acidity=mean(wine_df$volatile.acidity), 
+                               residual.sugar=mean(wine_df$residual.sugar), 
+                               free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                               pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol))
+red.bestwhite.pp.pred <- predict(model, red.bestwhite.pp, type='response')
+# High Citric Acid
+red.worstwhite.pp <- data.frame(type=1, citric.acid=quantile(wine_df$citric.acid, c(.8)), 
+                                total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), sulphates=mean(wine_df$sulphates), 
+                                chlorides=mean(wine_df$chlorides), fixed.acidity=mean(wine_df$fixed.acidity), 
+                                volatile.acidity=mean(wine_df$volatile.acidity), 
+                                residual.sugar=mean(wine_df$residual.sugar), 
+                                free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                                pH=mean(wine_df$pH), alcohol=mean(wine_df$alcohol))
+red.worstwhite.pp.pred <- predict(model, red.worstwhite.pp, type='response')
+
+paste("White Wine with the min Citric Acid: ", round(red.bestwhite.pp.pred*100,0))
+paste("White Wine with the max Citric Acid: ", round(red.worstwhite.pp.pred*100,0))
+
+### Best wine ###
+# High alcohol, sugar, and sulphates, and low total SO2, Chlorides, and Volatile Acidity, and red wine
+bestwine.pp <- data.frame(type=1, alcohol=quantile(wine_df$alcohol, c(.8)), 
+                          total.sulfur.dioxide=quantile(wine_df$total.sulfur.dioxide, c(.2)),
+                          chlorides=quantile(wine_df$chlorides, c(.2)), fixed.acidity=mean(wine_df$fixed.acidity), 
+                          volatile.acidity=quantile(wine_df$volatile.acidity, c(.2)), 
+                          residual.sugar=quantile(wine_df$residual.sugar, c(.8)), 
+                          free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                          total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), pH=mean(wine_df$pH), 
+                          sulphates=quantile(wine_df$sulphates, c(.8)), citric.acid=mean(wine_df$citric.acid)) 
+bestwine.pp.pred <- predict(model, bestwine.pp, type='response')
+# Low alcohol, sugar, and sulphates, and high total SO2, Chlorides, and Volatile Acidity, and red wine
+worsewine.pp <- data.frame(type=1, alcohol=quantile(wine_df$alcohol, c(.2)), 
+                           total.sulfur.dioxide=quantile(wine_df$total.sulfur.dioxide, c(.8)),
+                           chlorides=quantile(wine_df$chlorides, c(.8)), fixed.acidity=mean(wine_df$fixed.acidity), 
+                           volatile.acidity=quantile(wine_df$volatile.acidity, c(.8)), 
+                           residual.sugar=quantile(wine_df$residual.sugar, c(.2)), 
+                           free.sulfur.dioxide=mean(wine_df$free.sulfur.dioxide), 
+                           total.sulfur.dioxide=mean(wine_df$total.sulfur.dioxide), pH=mean(wine_df$pH), 
+                           sulphates=quantile(wine_df$sulphates, c(.2)), citric.acid=mean(wine_df$citric.acid))
+worsewine.pp.pred <- predict(model, worsewine.pp, type='response')
+
+paste("Red wine with the top six best traits: ", round(bestwine.pp.pred*100,0))
+paste("Red wine with the top six worst traits: ", round(worsewine.pp.pred*100,2))
+```
