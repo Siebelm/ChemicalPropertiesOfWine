@@ -1,4 +1,4 @@
-# ChemicalPropertiesOfWine
+# Chemical Properties Of Wine
 
 Objective: To understand the strength of a prediction of wine quality that can be made based on its chemical properties.
 
